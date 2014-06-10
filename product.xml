@@ -1,0 +1,401 @@
+0<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<product productid="taeram_gpx_to_map" active="1">
+	<title>GPX to Map</title>
+	<description>Displays any attached GPX files as in as a Map</description>
+	<version>1.0.0</version>
+	<url>http://code.radpenguin.ca/gpx-to-map/</url>
+	<versioncheckurl>http://code.radpenguin.ca/gpx-to-map/version.xml</versioncheckurl>
+	<dependencies>
+		<dependency dependencytype="php" minversion="5.3" maxversion="" />
+		<dependency dependencytype="vbulletin" minversion="4.2" maxversion="" />
+	</dependencies>
+	<codes>
+	</codes>
+	<templates>
+	</templates>
+	<stylevardfns>
+	</stylevardfns>
+	<stylevars>
+	</stylevars>
+	<plugins>
+		<plugin active="1" executionorder="5">
+			<title>Display GPX attachments as Maps</title>
+			<hookname>showthread_postbit_create</hookname>
+			<phpcode><![CDATA[if (!function_exists('humanizeGpxTime')) {
+    function humanizeGpxTime($dateTime, $userTimezone) {
+        $gpxTimezone = new \DateTimeZone('GMT');
+        $gpxTime = new \DateTime($dateTime, $gpxTimezone);
+
+        $userTimezone = new \DateTimezone($userTimezone);
+        $gpxTime->setTimezone($userTimezone);
+
+        // Jan 5, 2010 3:35:22 pm
+        return $gpxTime->format('M j, Y g:i:s a T');
+    }
+}
+
+// Verify the environment is valid
+if (!isset($postattach) || !array_key_exists('byattachment', $postattach)) {
+    if ($vbulletin->debug) {
+        echo "No attachments found, exiting";
+    }
+    return;
+}
+
+$hasMap = false;
+$pluginHtmlPrefix = '';
+$pluginHtmlPostfix = '';
+
+// Iterate through all attachments
+foreach ($postattach['byattachment'] as $attachment) {
+    // Is the attachment for this post?
+    if ($post['postid'] != $attachment['contentid']) {
+        continue;
+    }
+
+    // Is the attachment visible?
+    if ($attachment['state'] != 'visible') {
+        if ($vbulletin->debug) {
+            echo "Attachment " . $attachment['attachmentid'] ." is not in a 'visible' state, skipping.";
+        }
+        continue;
+    }
+
+    // Is it a gpx file?
+    if (!preg_match('/.gpx$/', $attachment['filename'])) {
+        if ($vbulletin->debug) {
+            echo "Attachment " . $attachment['attachmentid'] ." is not a .gpx file, skipping.";
+        }
+        continue;
+    }
+
+    // Get the gpx xml
+    $gpxString = null;
+    if ($vbulletin->options['attachfile'])
+    {
+        // Get the attachment filedataid and userid
+        $result = $db->query_first_slave("
+            SELECT Attachment.filedataid,
+                   FileData.userid
+            FROM " . TABLE_PREFIX . "attachment as Attachment,
+                 " . TABLE_PREFIX . "filedata as FileData
+            WHERE Attachment.attachmentid = " . $attachment['attachmentid'] . "
+            AND Attachment.filedataid = FileData.filedataid"
+        );
+        if (!$result) {
+            if ($vbulletin->debug) {
+                echo "Could not find attachment " . $attachment['attachmentid'] ." file data id.";
+            }
+            continue;
+        }
+
+        // Get the path to the attachment
+        require_once(DIR . '/includes/functions_file.php');
+        $attachpath = fetch_attachment_path($result['userid'], $result['filedataid']);
+
+        // Load the attachment
+        $gpxString = file_get_contents($attachpath);
+    } else {
+        // Get the attachment data from the database
+        $result = $db->query_first_slave("
+            SELECT FileData.filedata
+            FROM " . TABLE_PREFIX . "filedata as FileData
+            JOIN " . TABLE_PREFIX . "attachment as Attachment
+            WHERE Attachment.attachmentid = " . $attachment['attachmentid'] . "
+            AND Attachment.filedataid = FileData.filedataid"
+        );
+        if ($result) {
+            $gpxString = $result['filedata'];
+        }
+    }
+
+    if (!$gpxString) {
+        if ($vbulletin->debug) {
+            echo "Attachment " . $attachment['attachmentid'] ." has no file data, or was not found. Skipping.";
+        }
+        continue;
+    }
+
+    $locations = array();
+
+    try {
+        $xml = new SimpleXMLElement($gpxString);
+
+        // Does it have a <trk> element
+        if (!$xml->trk) {
+            continue;
+        }
+
+        // Does it have a <trkseg> element
+        if (!$xml->trk->trkseg) {
+            continue;
+        }
+
+        // Iterate through all the <trkpt> elements
+        foreach ($xml->trk->trkseg as $seg) {
+            foreach ($seg->trkpt as $trkpt) {
+                $locations[] = array(
+                    "latitude" => (float) $trkpt->attributes()->lat,
+                    "longitude" => (float) $trkpt->attributes()->lon,
+                    "time" => humanizeGpxTime((string) $trkpt->time, $vbulletin->options['gtm_default_timezone'])
+                );
+            }
+        }
+
+        $hasMap = true;
+        $mapCanvasId = "map-canvas-" . $attachment['attachmentid'];
+        $embiggenButtonId = "embiggen-" . $attachment['attachmentid'];
+        $sliderId = "slider-" . $attachment['attachmentid'];
+        $timeId = "time-" . $attachment['attachmentid'];
+
+        $pluginHtmlPrefix =
+            '
+            <div class="gpx-map">
+                <h3>' . $attachment['filename'] . '</h3>
+                <div class="gpx-map-canvas" id="' . $mapCanvasId . '"></div>
+                <input class="gpx-slider" id="' . $sliderId . '" type="range" min="0" max="' . (count($locations) - 1). '" step="1" value="0" />
+                <div class="gpx-time" id="' . $timeId . '">
+                    ' . $locations[0]['time'] . '
+                </div>
+                <div class="gpx-buttons-container">
+                    <button class="gpx-button" type="button" id="' . $embiggenButtonId . '">Toggle Map Size</button>
+                </div>
+            </div>
+
+            <script type="text/javascript">
+                var map' . $attachment['attachmentid'] . ' = function () {
+                    var embiggenButtonId = "' . $embiggenButtonId . '";
+                    var mapCanvasId = "' . $mapCanvasId . '";
+                    var sliderId = "' . $sliderId . '";
+                    var timeId = "' . $timeId . '";
+
+                    var locations = ' . json_encode($locations) . ';
+
+                    var map = null;
+                    var markers = [];
+                    var markerIcon = {
+                        path: google.maps.SymbolPath.CIRCLE,
+                        scale: 3,
+                        strokeColor: "' . $vbulletin->options['gtm_marker_colour'] . '",
+                        fillColor: "' . $vbulletin->options['gtm_marker_colour'] . '",
+                        fillOpacity: 1
+                    }
+                    var markerIconSelected = {
+                        path: google.maps.SymbolPath.CIRCLE,
+                        scale: 3,
+                        strokeColor: "' . $vbulletin->options['gtm_marker_colour_selected'] . '",
+                        fillColor: "' . $vbulletin->options['gtm_marker_colour_selected'] . '",
+                        fillOpacity: 1
+                    }
+
+                    // Render the map on the page
+                    function initializeGpxMap() {
+                        if (locations.length == 0) {
+                            return;
+                        }
+
+                        // Disable the slider
+                        setSliderDisabled(true);
+
+                        // Initialize the map
+                        var mapOptions = {
+                            center: new google.maps.LatLng(locations[0].latitude, locations[0].longitude),
+                            zoom: 12
+                        };
+                        map = new google.maps.Map(document.getElementById(mapCanvasId), mapOptions);
+
+                        // Add the markers to the map
+                        for (var i in locations) {
+                            markers.push(new google.maps.Marker({
+                                position: new google.maps.LatLng(locations[i].latitude, locations[i].longitude),
+                                map: map,
+                                icon: markerIcon
+                            }));
+                        }
+
+                        // Enable the slider
+                        setSliderDisabled(false);
+                    }
+                    google.maps.event.addDomListener(window, "load", initializeGpxMap);
+
+                    // Make the map full width
+                    var isEmbiggened = false;
+                    function embiggenMap() {
+                        if (isEmbiggened) {
+                            // Make it less biggened
+                            width = "400px";
+                            height = "400px";
+                        } else {
+                            // Embiggen it
+                            width = (document.getElementById(mapCanvasId).parentNode.parentNode.offsetWidth - 40) + "px";
+                            height = "800px";
+
+                            console.log(document.getElementById(mapCanvasId).parentNode.parentNode.offsetWidth)
+                        }
+                        isEmbiggened = !isEmbiggened;
+
+                        // Resize the map
+                        document.getElementById(mapCanvasId).style.width = width;
+                        document.getElementById(mapCanvasId).style.height = height;
+                        google.maps.event.trigger(map, "resize");
+
+                        // Recenter the map
+                        var selectedMarker = markers[selectedMarkerId];
+                        map.setCenter(selectedMarker.getPosition());
+                    }
+                    google.maps.event.addDomListener(document.getElementById(embiggenButtonId), "click", embiggenMap);
+
+                    // Control which point on the map is selected
+                    var selectedMarkerId = 0;
+                    function slider(e) {
+                        // Disable the slider
+                        setSliderDisabled(true);
+
+                        // Get the selected marker
+                        var newSelectedMarkerId = parseInt(document.getElementById(sliderId).value, 10);
+                        var marker = markers[newSelectedMarkerId];
+
+                        // Recenter the map on the selected marker if it is off screen
+                        if (!map.getBounds().contains(marker.getPosition())) {
+                            map.panTo(marker.getPosition());
+                        }
+
+                        // Convert all marker icons to selected/unselected depending on the direction the slider has moved
+                        if (newSelectedMarkerId > selectedMarkerId) {
+                            for (var i=selectedMarkerId; i <= newSelectedMarkerId; i++) {
+                                markers[i].setIcon(markerIconSelected);
+                            }
+                        } else {
+                            for (var i=selectedMarkerId; i > newSelectedMarkerId; i--) {
+                                markers[i].setIcon(markerIcon);
+                            }
+                        }
+
+                        // Add the time to the page
+                        document.getElementById(timeId).innerHTML = locations[newSelectedMarkerId].time;
+
+                        // Enable the slider
+                        setSliderDisabled(false);
+
+                        // Set the new selected marker id
+                        selectedMarkerId = newSelectedMarkerId;
+                    }
+                    google.maps.event.addDomListener(document.getElementById(sliderId), "change", slider);
+
+                    function setSliderDisabled(isDisabled) {
+                        if (isDisabled) {
+                            // Disable the slider
+                            document.getElementById(sliderId).disabled = true;
+                            document.getElementById(sliderId).className = "gpx-slider gpx-slider-disabled";
+                        } else {
+                            // Enable the slider
+                            document.getElementById(sliderId).disabled = false;
+                            document.getElementById(sliderId).className = "gpx-slider";
+                        }
+                    }
+                }();
+            </script>';
+    } catch (Exception $e) {
+        $pluginHtmlPostfix = "<br /><br /><small>(Bad XML in GPX file " . $attachment['filename'] . ", cannot display as map)</small>";
+    }
+}
+
+if ($hasMap) {
+    $pluginHtmlPrefix = '
+        <script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?key=' . $vbulletin->options['gtm_google_maps_api_key'] . '"></script>
+        <style type="text/css">
+            .gpx-map {
+                border-radius: 5px;
+                border: 1px solid #404040;
+                float: right;
+                margin: 10px;
+                margin-left: 20px;
+                padding: 0px 10px;
+                padding-bottom: 10px;
+            }
+
+            .gpx-map-canvas {
+                height: 400px;
+                margin-bottom: 5px;
+                width: 400px;
+            }
+
+            .gpx-buttons-container {
+                text-align: center;
+            }
+
+            .gpx-slider {
+                width: 100%;
+            }
+
+            .gpx-slider-disabled {
+                opacity: 0.5;
+            }
+
+            .gpx-time {
+                text-align: center;
+                margin: 5px 0px;
+            }
+
+            .gpx-button {
+                background: none;
+                border: 0 none;
+                cursor: pointer;
+                color: ' .  $vbulletin->options['gtm_button_colour'] . ';
+            }
+
+        </style>
+    ' . $pluginHtmlPrefix;
+}
+
+$post['pagetext_html'] = $pluginHtmlPrefix . nl2br($post['pagetext']) . $pluginHtmlPostfix;]]></phpcode>
+		</plugin>
+	</plugins>
+	<phrases>
+		<phrasetype name="vBulletin Settings" fieldname="vbsettings">
+			<phrase name="setting_gtm_button_colour_desc" date="1402366000" username="admin" version="1.0.0"><![CDATA[Colour for the "Toggle Map Size" link]]></phrase>
+			<phrase name="setting_gtm_button_colour_title" date="1402366000" username="admin" version="1.0.0"><![CDATA[Button/Link Colour]]></phrase>
+			<phrase name="setting_gtm_default_timezone_desc" date="1402366000" username="admin" version="1.0.0"><![CDATA[Used when converting UTC time in .gpx files to local time. Must be one of the supported PHP timezones: http://php.net/manual/en/timezones.php]]></phrase>
+			<phrase name="setting_gtm_default_timezone_title" date="1402366000" username="admin" version="1.0.0"><![CDATA[Default Timezone]]></phrase>
+			<phrase name="setting_gtm_google_maps_api_key_desc" date="1402366000" username="admin" version="1.0.0"><![CDATA[The Google Maps JavaScript API v3 key for your website]]></phrase>
+			<phrase name="setting_gtm_google_maps_api_key_title" date="1402366000" username="admin" version="1.0.0"><![CDATA[Google Maps API Key]]></phrase>
+			<phrase name="setting_gtm_marker_colour_desc" date="1402366000" username="admin" version="1.0.0"><![CDATA[The default colour for the map markers]]></phrase>
+			<phrase name="setting_gtm_marker_colour_selected_desc" date="1402366000" username="admin" version="1.0.0"><![CDATA[The colour of a selected map marker]]></phrase>
+			<phrase name="setting_gtm_marker_colour_selected_title" date="1402366000" username="admin" version="1.0.0"><![CDATA[Map Marker Colour (Selected)]]></phrase>
+			<phrase name="setting_gtm_marker_colour_title" date="1402366000" username="admin" version="1.0.0"><![CDATA[Map Marker Colour]]></phrase>
+			<phrase name="settinggroup_gpx_to_map" date="1402366000" username="admin" version="1.0.0"><![CDATA[GPX to Map Options]]></phrase>
+		</phrasetype>
+	</phrases>
+	<options>
+		<settinggroup name="gpx_to_map" displayorder="1">
+			<setting varname="gtm_google_maps_api_key" displayorder="1">
+				<datatype>free</datatype>
+			</setting>
+			<setting varname="gtm_default_timezone" displayorder="2">
+				<datatype>free</datatype>
+				<defaultvalue>America/Edmonton</defaultvalue>
+			</setting>
+			<setting varname="gtm_button_colour" displayorder="3">
+				<datatype>free</datatype>
+				<defaultvalue>#4380D3</defaultvalue>
+			</setting>
+			<setting varname="gtm_marker_colour" displayorder="4">
+				<datatype>free</datatype>
+				<defaultvalue>#4A71A6</defaultvalue>
+			</setting>
+			<setting varname="gtm_marker_colour_selected" displayorder="5">
+				<datatype>free</datatype>
+				<defaultvalue>#000B40</defaultvalue>
+			</setting>
+		</settinggroup>
+	</options>
+	<helptopics>
+	</helptopics>
+	<cronentries>
+	</cronentries>
+	<faqentries>
+	</faqentries>
+	<navigation>
+	</navigation>
+</product>
