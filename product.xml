@@ -3,7 +3,7 @@
 <product productid="taeram_gpx_to_map" active="1">
 	<title>GPX to Map</title>
 	<description>Displays any attached GPX files as in as a Map</description>
-	<version>1.0.1</version>
+	<version>1.0.2</version>
 	<url>http://code.radpenguin.ca/gpx-to-map/</url>
 	<versioncheckurl>http://code.radpenguin.ca/gpx-to-map/version.xml</versioncheckurl>
 	<dependencies>
@@ -347,9 +347,9 @@ if ($hasMap) {
 
         </style>
     ' . $pluginHtmlPrefix;
-}
 
-$post['pagetext_html'] = $pluginHtmlPrefix . nl2br($post['pagetext']) . $pluginHtmlPostfix;]]></phpcode>
+    $post['pagetext_html'] = $pluginHtmlPrefix . nl2br($post['pagetext']) . $pluginHtmlPostfix;
+}]]></phpcode>
 		</plugin>
 	</plugins>
 	<phrases>
