@@ -67,7 +67,6 @@ $hasMap = false;
 $pluginHtmlPrefix = '';
 $pluginHtmlPostfix = '';
 
-
 // Iterate through all attachments
 foreach ($postattach['byattachment'] as $attachment) {
     // Is the attachment for this post?
@@ -358,9 +357,9 @@ if ($hasMap) {
 
         </style>
     ' . $pluginHtmlPrefix;
-
-    $post['pagetext_html'] = $pluginHtmlPrefix . nl2br($post['pagetext']) . $pluginHtmlPostfix;
 }
+
+$post['gpx_to_map_html'] = $pluginHtmlPrefix . $pluginHtmlPostfix;
 
 ]]></phpcode>
 		</plugin>

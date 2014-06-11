@@ -24,10 +24,10 @@ For what's changed between releases, see the [CHANGELOG](CHANGELOG.md).
 This code is distributed under the [MIT License](LICENSE).
 
 # Installation / Upgrading
-Download the latest release from the [Releases](https://github.com/taeram/gpx-to-map-vbulletin/releases) tab,
-and unpack it on your computer.
 
-Next, to install or upgrade the product:
+To install or upgrade the product:
+* Download the latest release from the [Releases](https://github.com/taeram/gpx-to-map-vbulletin/releases)
+tab, and unpack it on your computer.
 * Login to the Admin Control Panel in your vBulletin server
 * In the sidebar, click "Plugins & Products"
 * In the sidebar, click "Manage Products"
@@ -35,6 +35,22 @@ Next, to install or upgrade the product:
 * Click the "Choose File" button, and select the product.xml you unpacked earlier.
 * If upgrading, be sure and select "Yes" to the "Allow Overwrite" option
 * Click the "Import" button
+
+The first time you install the Product, you'll need to edit a template:
+* Login to the Admin Control Panel in your vBulletin server
+* In the sidebar, click "Styles & Templates"
+* In the sidebar, click "Style Manager"
+* In the "Style Manager" table, find the "MASTER STYLE", and click the ">> <<" button to select it
+* In the "MASTER STYLE Templates" list, double click on "Postbit Templates >>"
+* Under "Postbit Templates >>", double click "postbit_legacy"
+* In the Template edit box, search for "postrow"
+* Modify the code from this (some code omitted for clarity):
+    <div class="postbody">
+        <div class="postrow ...">
+* To this
+    <div class="postbody">
+        {vb:raw post.gpx_to_map_html}
+        <div class="postrow ...">
 
 # Settings
 
