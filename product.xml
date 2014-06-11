@@ -162,7 +162,7 @@ foreach ($postattach['byattachment'] as $attachment) {
         $pluginHtmlPrefix =
             '
             <div class="gpx-map">
-                <h3>' . $attachment['filename'] . '</h3>
+                <h3 class="title" style="border: 0 none">' . $attachment['filename'] . '</h3>
                 <div class="gpx-map-canvas" id="' . $mapCanvasId . '"></div>
                 <input class="gpx-slider" id="' . $sliderId . '" type="range" min="0" max="' . (count($locations) - 1). '" step="1" value="0" />
                 <div class="gpx-time" id="' . $timeId . '">
