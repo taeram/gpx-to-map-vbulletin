@@ -314,6 +314,7 @@ foreach ($postattach['byattachment'] as $attachment) {
 if ($hasMap) {
     $pluginHtmlPrefix = '
         <script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?key=' . $vbulletin->options['gtm_google_maps_api_key'] . '"></script>
+
         <style type="text/css">
             .gpx-map {
                 border-radius: 5px;
@@ -356,6 +357,15 @@ if ($hasMap) {
             }
 
         </style>
+
+        <!--[if lt IE 10 ]>
+            <style type="text/css">
+                .gpx-slider {
+                    display: none;
+                }
+            </style>
+        <![endif]-->
+
     ' . $pluginHtmlPrefix;
 }
 
