@@ -198,6 +198,7 @@ foreach ($postattach['byattachment'] as $attachment) {
                         fillColor: "' . $vbulletin->options['gtm_marker_colour_selected'] . '",
                         fillOpacity: 1
                     }
+                    var track = null;
 
                     // Render the map on the page
                     function initializeGpxMap() {
@@ -223,6 +224,18 @@ foreach ($postattach['byattachment'] as $attachment) {
                                 icon: markerIcon
                             }));
                         }
+
+                        // Add the track (polyline) to the map
+                        var paths = [];
+                        for (var i in locations) {
+                            paths.push(new google.maps.LatLng(locations[i].latitude, locations[i].longitude));
+                        }
+                        track = new google.maps.Polyline({
+                            map: map,
+                            path: paths,
+                            strokeColor: "' . $vbulletin->options['gtm_marker_colour'] . '",
+                            strokeWeight: 3
+                        });
 
                         // Enable the slider
                         setSliderDisabled(false);
