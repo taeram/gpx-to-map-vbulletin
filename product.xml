@@ -22,7 +22,9 @@
 		<plugin active="1" executionorder="5">
 			<title>Display GPX attachments as Maps</title>
 			<hookname>showthread_postbit_create</hookname>
-			<phpcode><![CDATA[if (!function_exists('humanizeGpxTime')) {
+			<phpcode><![CDATA[
+
+if (!function_exists('humanizeGpxTime')) {
     function humanizeGpxTime($dateTime, $userTimezone) {
         $gpxTimezone = new \DateTimeZone('GMT');
         $gpxTime = new \DateTime($dateTime, $gpxTimezone);
@@ -33,12 +35,30 @@
         // Jan 5, 2010 3:35:22 pm
         return $gpxTime->format('M j, Y g:i:s a T');
     }
+
+    function getLocationsFromXml($xml, $defaultTimezone) {
+        global $locations;
+
+        if ($xml->count() > 0) {
+            foreach ($xml->children() as $child) {
+                getLocationsFromXml($child, $defaultTimezone);
+            }
+        }
+
+        if ($xml->attributes()->lat && $xml->attributes()->lon && $xml->time) {
+            $locations[] = array(
+                'latitude' => (float) $xml->attributes()->lat,
+                'longitude' => (float) $xml->attributes()->lon,
+                'time' => humanizeGpxTime((string) $xml->time, $defaultTimezone),
+            );
+        }
+    }
 }
 
 // Verify the environment is valid
 if (!isset($postattach) || !array_key_exists('byattachment', $postattach)) {
     if ($vbulletin->debug) {
-        echo "No attachments found, exiting";
+        echo "No attachments found, exiting\n";
     }
     return;
 }
@@ -46,6 +66,7 @@ if (!isset($postattach) || !array_key_exists('byattachment', $postattach)) {
 $hasMap = false;
 $pluginHtmlPrefix = '';
 $pluginHtmlPostfix = '';
+
 
 // Iterate through all attachments
 foreach ($postattach['byattachment'] as $attachment) {
@@ -57,7 +78,7 @@ foreach ($postattach['byattachment'] as $attachment) {
     // Is the attachment visible?
     if ($attachment['state'] != 'visible') {
         if ($vbulletin->debug) {
-            echo "Attachment " . $attachment['attachmentid'] ." is not in a 'visible' state, skipping.";
+            echo "Attachment " . $attachment['attachmentid'] ." is not in a 'visible' state, skipping.\n";
         }
         continue;
     }
@@ -65,7 +86,7 @@ foreach ($postattach['byattachment'] as $attachment) {
     // Is it a gpx file?
     if (!preg_match('/.gpx$/', $attachment['filename'])) {
         if ($vbulletin->debug) {
-            echo "Attachment " . $attachment['attachmentid'] ." is not a .gpx file, skipping.";
+            echo "Attachment " . $attachment['attachmentid'] ." is not a .gpx file, skipping.\n";
         }
         continue;
     }
@@ -85,7 +106,7 @@ foreach ($postattach['byattachment'] as $attachment) {
         );
         if (!$result) {
             if ($vbulletin->debug) {
-                echo "Could not find attachment " . $attachment['attachmentid'] ." file data id.";
+                echo "Could not find attachment " . $attachment['attachmentid'] ." file data id.\n";
             }
             continue;
         }
@@ -122,25 +143,15 @@ foreach ($postattach['byattachment'] as $attachment) {
     try {
         $xml = new SimpleXMLElement($gpxString);
 
-        // Does it have a <trk> element
-        if (!$xml->trk) {
-            continue;
-        }
+        // Extract the locations the xml
+        $locations = array();
+        getLocationsFromXml($xml, $vbulletin->options['gtm_default_timezone']);
 
-        // Does it have a <trkseg> element
-        if (!$xml->trk->trkseg) {
-            continue;
-        }
-
-        // Iterate through all the <trkpt> elements
-        foreach ($xml->trk->trkseg as $seg) {
-            foreach ($seg->trkpt as $trkpt) {
-                $locations[] = array(
-                    "latitude" => (float) $trkpt->attributes()->lat,
-                    "longitude" => (float) $trkpt->attributes()->lon,
-                    "time" => humanizeGpxTime((string) $trkpt->time, $vbulletin->options['gtm_default_timezone'])
-                );
+        if (empty($locations)) {
+            if ($vbulletin->debug) {
+                echo "Attachment " . $attachment['attachmentid'] ." has a .gpx extension, but doesn't appear to be valid GPX, skipping.";
             }
+            continue;
         }
 
         $hasMap = true;
@@ -349,7 +360,9 @@ if ($hasMap) {
     ' . $pluginHtmlPrefix;
 
     $post['pagetext_html'] = $pluginHtmlPrefix . nl2br($post['pagetext']) . $pluginHtmlPostfix;
-}]]></phpcode>
+}
+
+]]></phpcode>
 		</plugin>
 	</plugins>
 	<phrases>
