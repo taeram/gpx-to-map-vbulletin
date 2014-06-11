@@ -45,12 +45,19 @@ The first time you install the Product, you'll need to edit a template:
 * Under "Postbit Templates >>", double click "postbit_legacy"
 * In the Template edit box, search for "postrow"
 * Modify the code from this (some code omitted for clarity):
-    <div class="postbody">
-        <div class="postrow ...">
+
+```html
+<div class="postbody">
+     <div class="postrow ...">
+```
+
 * To this
+
+```html
     <div class="postbody">
         {vb:raw post.gpx_to_map_html}
         <div class="postrow ...">
+```
 
 # Settings
 
