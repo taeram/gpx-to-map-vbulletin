@@ -18,7 +18,7 @@ If a post has a .gpx file attached to it, a map automatically appears to the rig
 * Clicking the "Toggle Map Size" link switches the map between default and full sized
 * Customizable map marker and link colours
 
-For what's changed between releases, see the [CHANGELOG](CHANGELOG.md).
+For what's changed between releases, see the [Releases](https://github.com/taeram/gpx-to-map-vbulletin/releases) page.
 
 # Licensing
 This code is distributed under the [MIT License](LICENSE).
