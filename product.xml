@@ -3,7 +3,7 @@
 <product productid="taeram_gpx_to_map" active="1">
 	<title>GPX to Map</title>
 	<description>Displays any attached GPX files as in as a Map</description>
-	<version>1.1.0</version>
+	<version>1.1.1</version>
 	<url>http://code.radpenguin.ca/gpx-to-map/</url>
 	<versioncheckurl>http://code.radpenguin.ca/gpx-to-map/version.xml</versioncheckurl>
 	<dependencies>
