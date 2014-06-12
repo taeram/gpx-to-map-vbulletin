@@ -36,21 +36,38 @@ if (!function_exists('humanizeGpxTime')) {
         return $gpxTime->format('M j, Y g:i:s a T');
     }
 
+    $parsedLocations = array();
     function getLocationsFromXml($xml, $defaultTimezone) {
-        global $locations;
+        global $locations, $parsedLocations;
+
+        if ($xml->attributes()->lat && $xml->attributes()->lon) {
+            // Round the lat/lng down to 7 decimal points, which still gives us ~5 ft precision,
+            // but hopefully reduces the amount of almost identical points
+            $latitude = round((float) $xml->attributes()->lat, 7);
+            $longitude = round((float) $xml->attributes()->lon, 7);
+            $id = md5($latitude . $longitude);
+
+            // Don't add the same lat/lng to the locations array twice
+            if (!isset($parsedLocations[$id])) {
+                $parsedLocations[$id] = true;
+
+                $time = null;
+                if ($xml->time) {
+                    $time = humanizeGpxTime((string) $xml->time, $defaultTimezone);
+                }
+
+                $locations[] = array(
+                    'latitude' => $latitude,
+                    'longitude' => $longitude,
+                    'time' => $time
+                );
+            }
+        }
 
         if ($xml->count() > 0) {
             foreach ($xml->children() as $child) {
                 getLocationsFromXml($child, $defaultTimezone);
             }
-        }
-
-        if ($xml->attributes()->lat && $xml->attributes()->lon && $xml->time) {
-            $locations[] = array(
-                'latitude' => (float) $xml->attributes()->lat,
-                'longitude' => (float) $xml->attributes()->lon,
-                'time' => humanizeGpxTime((string) $xml->time, $defaultTimezone),
-            );
         }
     }
 }
@@ -140,6 +157,11 @@ foreach ($postattach['byattachment'] as $attachment) {
     $locations = array();
 
     try {
+
+        // Allow SimpleXML to parse Garmin's odd <gpxx:foo> syntax by trimming off the "gpxx:" portion of the tag
+        $gpxString = str_replace('<gpxx:', '<', $gpxString);
+        $gpxString = str_replace('</gpxx:', '</', $gpxString);
+
         $xml = new SimpleXMLElement($gpxString);
 
         // Extract the locations the xml
@@ -253,8 +275,6 @@ foreach ($postattach['byattachment'] as $attachment) {
                             // Embiggen it
                             width = (document.getElementById(mapCanvasId).parentNode.parentNode.offsetWidth - 40) + "px";
                             height = "800px";
-
-                            console.log(document.getElementById(mapCanvasId).parentNode.parentNode.offsetWidth)
                         }
                         isEmbiggened = !isEmbiggened;
 
@@ -296,7 +316,11 @@ foreach ($postattach['byattachment'] as $attachment) {
                         }
 
                         // Add the time to the page
-                        document.getElementById(timeId).innerHTML = locations[newSelectedMarkerId].time;
+                        if (locations[newSelectedMarkerId].time) {
+                            document.getElementById(timeId).innerHTML = locations[newSelectedMarkerId].time;
+                        } else {
+                            document.getElementById(timeId).innerHTML = "&nbsp;";
+                        }
 
                         // Enable the slider
                         setSliderDisabled(false);
