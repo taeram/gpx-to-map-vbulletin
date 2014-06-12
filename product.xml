@@ -83,7 +83,7 @@ foreach ($postattach['byattachment'] as $attachment) {
     }
 
     // Is it a gpx file?
-    if (!preg_match('/.gpx$/', $attachment['filename'])) {
+    if (!preg_match('/.gpx$/i', $attachment['filename'])) {
         if ($vbulletin->debug) {
             echo "Attachment " . $attachment['attachmentid'] ." is not a .gpx file, skipping.\n";
         }
